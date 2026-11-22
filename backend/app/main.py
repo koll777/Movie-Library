@@ -16,6 +16,8 @@ from app.schemas import (
     MovieResponse,
     GenreCreate,
     GenreResponse,
+    RatingCreate,
+    RatingResponse,
 )
 from app.security import (
     hash_password,
@@ -346,3 +348,106 @@ def get_current_user_profile(
     current_user: User = Depends(get_current_user)
 ):
     return current_user
+
+@app.get("/ratings", response_model=list[RatingResponse])
+def get_ratings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(Rating).filter(
+        Rating.user_id == current_user.id
+    ).order_by(Rating.id).all()
+
+
+@app.post(
+    "/ratings",
+    response_model=RatingResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_rating(
+    rating_data: RatingCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    movie = db.query(Movie).filter(
+        Movie.id == rating_data.movie_id
+    ).first()
+
+    if movie is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Фильм не найден"
+        )
+
+    existing_rating = db.query(Rating).filter(
+        Rating.user_id == current_user.id,
+        Rating.movie_id == rating_data.movie_id
+    ).first()
+
+    if existing_rating:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Вы уже оценили этот фильм"
+        )
+
+    new_rating = Rating(
+        user_id=current_user.id,
+        movie_id=rating_data.movie_id,
+        score=rating_data.score
+    )
+
+    db.add(new_rating)
+    db.commit()
+    db.refresh(new_rating)
+
+    return new_rating
+
+
+@app.put("/ratings/{rating_id}", response_model=RatingResponse)
+def update_rating(
+    rating_id: int,
+    rating_data: RatingCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    rating = db.query(Rating).filter(
+        Rating.id == rating_id,
+        Rating.user_id == current_user.id
+    ).first()
+
+    if rating is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Оценка не найдена"
+        )
+
+    rating.score = rating_data.score
+
+    db.commit()
+    db.refresh(rating)
+
+    return rating
+
+
+@app.delete(
+    "/ratings/{rating_id}",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_rating(
+    rating_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    rating = db.query(Rating).filter(
+        Rating.id == rating_id,
+        Rating.user_id == current_user.id
+    ).first()
+
+    if rating is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Оценка не найдена"
+        )
+
+    db.delete(rating)
+    db.commit()

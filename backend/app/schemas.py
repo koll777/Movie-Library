@@ -76,3 +76,16 @@ class MovieResponse(BaseModel):
     genres: list[GenreResponse] = []
 
     model_config = {"from_attributes": True}
+    
+class RatingCreate(BaseModel):
+    movie_id: PositiveInt
+    score: int = Field(ge=1, le=10)
+
+
+class RatingResponse(BaseModel):
+    id: int
+    user_id: int
+    movie_id: int
+    score: int
+
+    model_config = {"from_attributes": True}
