@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:18
+    container_name: kinoteka_db
+    restart: always
+    environment:
+      POSTGRES_DB: kinoteka
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: AC3PFD7Seg
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
