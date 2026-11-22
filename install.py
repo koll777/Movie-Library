@@ -188,7 +188,7 @@ def _prepare_env_file(path: Path) -> bool:
 
 def _ask_database_password() -> str:
     while True:
-        password = getpass.getpass("Придумайте пароль для PostgreSQL (минимум 12 символов): ")
+        password = getpass.getpass("Придумайте пароль для PostgreSQL (минимум 10 символов): ")
         if len(password) < 10:
             print("Пароль должен содержать не менее 10 символов.")
             continue
