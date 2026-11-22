@@ -10,6 +10,8 @@ from app.schemas import (
     UserCreate,
     UserResponse,
     UserLogin,
+    PasswordChange,
+    PasswordChangeResponse,
     TokenResponse,
     MovieCreate,
     MovieUpdate,
@@ -358,6 +360,39 @@ def get_current_user(
         )
 
     return user
+
+
+@app.put(
+    "/users/me/password",
+    response_model=PasswordChangeResponse,
+)
+def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(
+        password_data.current_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный текущий пароль",
+        )
+
+    if verify_password(
+        password_data.new_password,
+        current_user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен отличаться от текущего",
+        )
+
+    current_user.password_hash = hash_password(password_data.new_password)
+    db.commit()
+
+    return PasswordChangeResponse(message="Пароль успешно изменён")
 
 
 @app.get("/users/me", response_model=UserResponse)
