@@ -1,18 +1,18 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-# Загружаем настройки из .env
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
 
 # Формируем адрес подключения
 DATABASE_URL = URL.create(
     drivername="postgresql+psycopg",
     username=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
+    password=os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD"),
     host=os.getenv("DB_HOST"),
     port=int(os.getenv("DB_PORT")),
     database=os.getenv("DB_NAME"),

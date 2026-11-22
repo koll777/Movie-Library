@@ -64,10 +64,10 @@ Movie-Library/
 │   │   └── ...
 │   ├── alembic/
 │   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
+│   └── Dockerfile
 ├── docker-compose.yml
 ├── .env
+├── .env.example
 └── README.md
 ```
 
@@ -92,46 +92,34 @@ git clone https://github.com/koll777/Movie-Library.git
 cd Movie-Library
 ```
 
-### 2. Создать файл настроек Backend
+### 2. Создать единый файл настроек
 
 **macOS / Linux:**
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.example .env
 ```
 
 **Windows PowerShell:**
 
 ```powershell
-Copy-Item backend/.env.example backend/.env
+Copy-Item .env.example .env
 ```
 
-Откройте `backend/.env` в редакторе и проверьте параметры подключения. Для запуска через Docker Compose Backend должен подключаться к сервису базы данных по внутреннему имени `db` и порту `5432`:
+Откройте корневой `.env` и задайте собственные значения:
 
 ```env
-DB_HOST=db
-DB_PORT=5432
+DB_HOST=localhost
+DB_PORT=5433
 DB_NAME=kinoteka
 DB_USER=postgres
-DB_PASSWORD=ВАШ_ПАРОЛЬ
-JWT_SECRET_KEY=ВАШ_СЕКРЕТНЫЙ_КЛЮЧ
+POSTGRES_PASSWORD=ВАШ_НАДЁЖНЫЙ_ПАРОЛЬ
+JWT_SECRET_KEY=ВАШ_ДЛИННЫЙ_СЛУЧАЙНЫЙ_СЕКРЕТ
 ```
 
-Если в вашем `backend/.env.example` присутствуют другие переменные, сохраните их и заполните по назначению. Не публикуйте реальные пароли и JWT-ключ.
+Для Docker Compose адрес базы внутри контейнера будет автоматически заменён на `db:5432`. При локальном запуске Backend используются указанные в `.env` `localhost:5433`. Для обоих способов пароль PostgreSQL задаётся один раз через `POSTGRES_PASSWORD`. Не публикуйте реальные пароли и JWT-ключ.
 
-### 3. Создать корневой файл `.env`
-
-В корневой папке проекта создайте файл с именем `.env` (рядом с `docker-compose.yml`). В нём должна быть переменная:
-
-```env
-POSTGRES_PASSWORD=ВАШ_ПАРОЛЬ
-```
-
-Значение `POSTGRES_PASSWORD` должно совпадать со значением `DB_PASSWORD` в `backend/.env`.
-
-Для нового экземпляра базы данных придумайте собственный пароль. Не используйте пароль из чужого компьютера или опубликованных примеров.
-
-> Если корневой `.env` уже существует, не перезаписывайте его автоматически. Сначала проверьте, что в нём задан `POSTGRES_PASSWORD`.
+> Если корневой `.env` уже существует, не перезаписывайте его автоматически: добавьте или проверьте необходимые переменные. Файл `backend/.env` больше не используется.
 
 ## Запуск через Docker
 
@@ -289,7 +277,7 @@ DB_HOST=localhost
 DB_PORT=5433
 ```
 
-Остальные параметры (`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET_KEY`) должны соответствовать вашей конфигурации.
+Параметры `DB_NAME`, `DB_USER`, `POSTGRES_PASSWORD` и `JWT_SECRET_KEY` берутся из корневого `.env`. Отдельный `backend/.env` не нужен.
 
 Из корневой папки проекта:
 
