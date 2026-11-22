@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import engine, get_db
@@ -263,11 +264,11 @@ def db_check():
             "message": "PostgreSQL подключен успешно!"
         }
 
-    except Exception as e:
-        return {
-            "message": "Ошибка подключения",
-            "error": str(e)
-        }
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="База данных временно недоступна"
+        )
 
 
 @app.post(

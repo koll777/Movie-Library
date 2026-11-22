@@ -104,6 +104,7 @@ def seed_data():
     except Exception as error:
         db.rollback()
         print("Ошибка при добавлении данных:", error)
+        raise
 
     finally:
         db.close()
