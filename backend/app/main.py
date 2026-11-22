@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy import text
@@ -39,10 +39,26 @@ def home():
     }
 
 @app.get("/movies", response_model=list[MovieResponse])
-def get_movies(db: Session = Depends(get_db)):
-    movies = db.query(Movie).options(
-        selectinload(Movie.genres)
-    ).all()
+def get_movies(
+    search: str | None = None,
+    genre: str | None = None,
+    year: int | None = Query(default=None, gt=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Movie).options(selectinload(Movie.genres))
+
+    if search is not None:
+        query = query.filter(Movie.title.ilike(f"%{search}%"))
+
+    if genre is not None:
+        query = query.filter(Movie.genres.any(Genre.name == genre))
+
+    if year is not None:
+        query = query.filter(Movie.release_year == year)
+
+    movies = query.order_by(Movie.id).offset(offset).limit(limit).all()
 
     return movies
 
