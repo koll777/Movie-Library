@@ -89,3 +89,6 @@ class RatingResponse(BaseModel):
     score: int
 
     model_config = {"from_attributes": True}
+    
+class FavoriteCreate(BaseModel):
+    movie_id: PositiveInt

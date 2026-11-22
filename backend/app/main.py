@@ -18,6 +18,7 @@ from app.schemas import (
     GenreResponse,
     RatingCreate,
     RatingResponse,
+    FavoriteCreate,
 )
 from app.security import (
     hash_password,
@@ -450,4 +451,91 @@ def delete_rating(
         )
 
     db.delete(rating)
+    db.commit()
+    
+@app.get("/favorites", response_model=list[MovieResponse])
+def get_favorites(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    favorites = db.query(Favorite).filter(
+        Favorite.user_id == current_user.id
+    ).all()
+
+    return [
+        db.query(Movie)
+        .options(selectinload(Movie.genres))
+        .filter(Movie.id == favorite.movie_id)
+        .first()
+        for favorite in favorites
+    ]
+
+
+@app.post(
+    "/favorites",
+    response_model=MovieResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def add_favorite(
+    favorite_data: FavoriteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    movie = db.query(Movie).filter(
+        Movie.id == favorite_data.movie_id
+    ).first()
+
+    if movie is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Фильм не найден"
+        )
+
+    existing_favorite = db.query(Favorite).filter(
+        Favorite.user_id == current_user.id,
+        Favorite.movie_id == favorite_data.movie_id
+    ).first()
+
+    if existing_favorite:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Фильм уже добавлен в избранное"
+        )
+
+    new_favorite = Favorite(
+        user_id=current_user.id,
+        movie_id=favorite_data.movie_id
+    )
+
+    db.add(new_favorite)
+    db.commit()
+
+    return db.query(Movie).options(
+        selectinload(Movie.genres)
+    ).filter(
+        Movie.id == favorite_data.movie_id
+    ).first()
+
+
+@app.delete(
+    "/favorites/{movie_id}",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_favorite(
+    movie_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    favorite = db.query(Favorite).filter(
+        Favorite.user_id == current_user.id,
+        Favorite.movie_id == movie_id
+    ).first()
+
+    if favorite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Фильм не найден в избранном"
+        )
+
+    db.delete(favorite)
     db.commit()
