@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy import text
 from sqlalchemy.orm import Session, selectinload
 
@@ -7,16 +9,24 @@ from app.models import User, Movie, Genre, Rating, Favorite
 from app.schemas import (
     UserCreate,
     UserResponse,
+    UserLogin,
+    TokenResponse,
     MovieCreate,
     MovieUpdate,
     MovieResponse,
     GenreCreate,
     GenreResponse,
 )
-from app.security import hash_password
+from app.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    decode_access_token,
+)
 
 
 app = FastAPI(title="Кинотека")
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 @app.get("/")
@@ -270,3 +280,69 @@ def register_user(
     db.refresh(new_user)
 
     return new_user
+
+
+@app.post("/users/login", response_model=TokenResponse)
+def login_user(
+    login_data: UserLogin,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == login_data.email).first()
+
+    if user is None or not verify_password(
+        login_data.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный email или пароль",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return TokenResponse(access_token=create_access_token(user.id))
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется токен Bearer",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Невалидный или истёкший токен",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    subject = payload.get("sub")
+    if not isinstance(subject, str) or not subject.isdecimal():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Невалидный или истёкший токен",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.id == int(subject)).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Пользователь не найден",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
+
+
+@app.get("/users/me", response_model=UserResponse)
+def get_current_user_profile(
+    current_user: User = Depends(get_current_user)
+):
+    return current_user
