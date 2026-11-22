@@ -187,6 +187,7 @@ def _prepare_env_file(path: Path) -> bool:
 
 
 def _ask_database_password() -> str:
+    print("Введите пароль PostgreSQL. Ввод пароля не отображается на экране.")
     while True:
         password = getpass.getpass("Придумайте пароль для PostgreSQL (минимум 10 символов): ")
         if len(password) < 10:
@@ -220,12 +221,14 @@ def _run(command: list[str], error_message: str) -> None:
 
 def main() -> int:
     try:
+        print("Проверяю подключение к Docker Desktop...", flush=True)
         _run(
             ["docker", "info"],
             "Docker недоступен. Запустите Docker Desktop и повторите установку.",
         )
 
         env_exists = ENV_FILE.exists()
+        print("Проверяю настройки проекта...", flush=True)
         env_changed = _prepare_env_file(ENV_FILE)
         if env_changed and env_exists:
             print("Добавлены недостающие настройки; существующие значения сохранены.")
@@ -234,10 +237,12 @@ def main() -> int:
         else:
             print("Корневой .env уже настроен; оставляю его без изменений.")
 
+        print("Проверяю Docker Compose...", flush=True)
         _run(
             ["docker", "compose", "config", "--quiet"],
             "Не удалось проверить Docker Compose. Проверьте конфигурацию проекта.",
         )
+        print("Подготавливаю хранилище базы данных...", flush=True)
         _run(
             ["docker", "volume", "create", "kinoteka_postgres_data"],
             "Не удалось создать Docker Volume для базы данных.",
@@ -246,7 +251,8 @@ def main() -> int:
         print(f"Ошибка установки: {error}", file=sys.stderr)
         return 1
 
-    print("Настройка завершена. Для сборки и запуска выполните:")
+    print("Настройка завершена; приложение ещё не запущено.")
+    print("Из корневой папки проекта выполните:")
     print("  docker compose up --build -d")
     return 0
 
