@@ -1,0 +1,24 @@
+# Секреты
+.env
+*.env
+
+# Разрешаем пример конфигурации
+!.env.example
+
+# Виртуальное окружение
+venv/
+.venv/
+
+# Кэш Python
+__pycache__/
+*.py[cod]
+
+# Резервные копии
+*.dump
+*.sql
+
+# macOS
+.DS_Store
+
+# Настройки VS Code
+.vscode/
