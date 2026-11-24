@@ -385,6 +385,3 @@ PostgreSQL хранит данные в Docker Volume `kinoteka_postgres_data`. 
 - Не меняйте пароль существующей базы простым изменением `.env`: переменная `POSTGRES_PASSWORD` применяется при первоначальной инициализации хранилища и сама по себе не меняет пароль уже созданного пользователя PostgreSQL.
 - Для подключения Backend к БД внутри Compose используются `DB_HOST=db` и `DB_PORT=5432`; для локального запуска Python на компьютере — `DB_HOST=localhost` и `DB_PORT=5433`.
 
----
-
-**Репозиторий:** https://github.com/koll777/Movie-Library
