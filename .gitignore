@@ -16,6 +16,8 @@ __pycache__/
 # Резервные копии
 *.dump
 *.sql
+frontend.log
+frontend.pid
 
 # macOS
 .DS_Store

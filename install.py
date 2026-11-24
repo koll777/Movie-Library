@@ -2,10 +2,14 @@
 
 import getpass
 import os
+import socket
 import secrets
 import subprocess
 import sys
 import tempfile
+import time
+import webbrowser
+from urllib.request import urlopen
 from pathlib import Path
 
 
@@ -219,13 +223,153 @@ def _run(command: list[str], error_message: str) -> None:
         raise SetupError(error_message)
 
 
+def _start_docker_desktop() -> None:
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", "-a", "Docker"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif os.name == "nt":
+        subprocess.Popen(
+            ["cmd", "/c", "start", "", "Docker Desktop"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def _wait_for_docker(timeout_seconds: int = 120) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            subprocess.run(
+                ["docker", "info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            return
+        except (OSError, subprocess.CalledProcessError):
+            time.sleep(2)
+    raise SetupError("Docker Desktop не запустился за отведённое время.")
+
+
+def _read_postgres_password() -> str:
+    values, _ = _read_env_values(ENV_FILE)
+    password = values.get("POSTGRES_PASSWORD", "")
+    if not password:
+        raise SetupError("Не найден POSTGRES_PASSWORD в корневом .env.")
+    if "'" in password or "\\" in password:
+        raise SetupError("POSTGRES_PASSWORD не должен содержать символы одинарной кавычки и обратного слеша.")
+    return password
+
+
+def _wait_for_database(timeout_seconds: int = 120) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "exec",
+                    "-T",
+                    "db",
+                    "pg_isready",
+                    "-U",
+                    "postgres",
+                    "-d",
+                    "kinoteka",
+                ],
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            return
+        except (OSError, subprocess.CalledProcessError):
+            time.sleep(2)
+    raise SetupError("База данных PostgreSQL не стала доступна.")
+
+
+def _sync_postgres_password() -> None:
+    password = _read_postgres_password()
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "db",
+            "psql",
+            "-U",
+            "postgres",
+            "-d",
+            "kinoteka",
+            "-c",
+            f"ALTER USER postgres WITH PASSWORD '{password}'",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SetupError("Не удалось синхронизировать пароль PostgreSQL.")
+
+
+def _port_is_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
+        connection.settimeout(0.5)
+        return connection.connect_ex((host, port)) == 0
+
+
+def _start_frontend() -> None:
+    if _port_is_open("127.0.0.1", 5500):
+        return
+
+    frontend_dir = ROOT / "frontend"
+    log_path = ROOT / "frontend.log"
+    log_file = log_path.open("a", encoding="utf-8")
+    process = subprocess.Popen(
+        [sys.executable, "-m", "http.server", "5500", "--directory", str(frontend_dir)],
+        cwd=ROOT,
+        stdout=log_file,
+        stderr=log_file,
+        start_new_session=True,
+    )
+    (ROOT / "frontend.pid").write_text(str(process.pid), encoding="utf-8")
+
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        if _port_is_open("127.0.0.1", 5500):
+            return
+        time.sleep(0.25)
+    raise SetupError("Frontend-сервер не запустился.")
+
+
+def _wait_for_backend(timeout_seconds: int = 120) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        try:
+            with urlopen("http://127.0.0.1:8000/db-check", timeout=2) as response:
+                if response.status == 200:
+                    return
+        except Exception:
+            pass
+        time.sleep(2)
+    raise SetupError("Backend не стал доступен по адресу http://127.0.0.1:8000.")
+
+
 def main() -> int:
     try:
         print("Проверяю подключение к Docker Desktop...", flush=True)
-        _run(
+        docker_available = subprocess.run(
             ["docker", "info"],
-            "Docker недоступен. Запустите Docker Desktop и повторите установку.",
-        )
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode == 0
+        if not docker_available:
+            print("Запускаю Docker Desktop...", flush=True)
+            _start_docker_desktop()
+            _wait_for_docker()
 
         env_exists = ENV_FILE.exists()
         print("Проверяю настройки проекта...", flush=True)
@@ -247,13 +391,33 @@ def main() -> int:
             ["docker", "volume", "create", "kinoteka_postgres_data"],
             "Не удалось создать Docker Volume для базы данных.",
         )
+
+        print("Запускаю PostgreSQL...", flush=True)
+        _run(
+            ["docker", "compose", "up", "-d", "db"],
+            "Не удалось запустить PostgreSQL.",
+        )
+        _wait_for_database()
+        _sync_postgres_password()
+
+        print("Собираю и запускаю backend...", flush=True)
+        _run(
+            ["docker", "compose", "up", "--build", "-d", "backend"],
+            "Не удалось собрать или запустить backend.",
+        )
+        _wait_for_backend()
+
+        print("Запускаю frontend...", flush=True)
+        _start_frontend()
     except SetupError as error:
         print(f"Ошибка установки: {error}", file=sys.stderr)
         return 1
 
-    print("Настройка завершена; приложение ещё не запущено.")
-    print("Из корневой папки проекта выполните:")
-    print("  docker compose up --build -d")
+    print("Установка и запуск завершены.")
+    print("Frontend: http://127.0.0.1:5500")
+    print("Backend:  http://127.0.0.1:8000")
+    print("Документация API: http://127.0.0.1:8000/docs")
+    webbrowser.open("http://127.0.0.1:5500")
     return 0
 
 
