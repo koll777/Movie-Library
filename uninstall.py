@@ -7,7 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
 FRONTEND_PID_FILE = ROOT / "frontend.pid"
@@ -18,12 +17,15 @@ BACKEND_IMAGE = "movie-library-backend"
 
 def docker_is_available() -> bool:
     try:
-        return subprocess.run(
-            ["docker", "info"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        ).returncode == 0
+        return (
+            subprocess.run(
+                ["docker", "info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 0
+        )
     except OSError:
         return False
 
@@ -31,8 +33,11 @@ def docker_is_available() -> bool:
 def is_project_frontend_process(pid: int) -> bool:
     try:
         if sys.platform.startswith("linux"):
-            command = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(
-                "utf-8", errors="replace"
+            command = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode("utf-8", errors="replace")
             )
             return "http.server" in command and "5500" in command
 
