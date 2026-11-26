@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.middleware.cors import CORSMiddleware
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -43,6 +44,25 @@ openapi_tags = [
 
 app = FastAPI(title="Кинотека", openapi_tags=openapi_tags)
 bearer_scheme = HTTPBearer(auto_error=False)
+
+@app.on_event("startup")
+def startup_seed_catalog():
+    try:
+        from app.seed import seed_data
+        seed_data()
+    except Exception as error:
+        print("Предзаполнение каталога пропущено:", error)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", tags=["System"])
